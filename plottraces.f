@@ -344,7 +344,7 @@ c Separated block data program required by standard but not gnu.
       data ly/.false./my/.false./lx/.false./mx/.false./la/.false./
       data lp/.false./lj/.true./lw/.false./ll/.true./
       data xrange/0.,0./yrange/0.,0./
-      data xtitle/' '/ytitle/' '/linelabel/ntmax*' '/
+      data xtitle/' '/ytitle/' '/linelabel/ntmax*' '/cllabel/' '/
       data nmask/ntmax*1/ncolumns/1/
       data xlego/.2/ylego/0./cz/1./
       data xsf/1./ysf/1./ybh/0./ysxp/0./xof/0./yof/0./
