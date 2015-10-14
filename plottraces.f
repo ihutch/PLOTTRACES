@@ -1,4 +1,4 @@
-      program plottraces
+c      program plottraces
 c Read in traces from files prescribed on the command line and plot them.
 c The format of the files consists of one line with up to two integers
 c np,nt followed by np lines of nt+1 floats which prescribe the x and nt
@@ -140,7 +140,15 @@ c Multi-frame ranges set separately.
 c Plot the actual trace:
             call color((ntraceno(it)-1)/i2+1)
             call dashset(mod((ntraceno(it)-1)/i2,nstycyc))
-            if(ljm(it))call polyline(x(1,it),y(1,it),np(it))
+            if(ljm(it))then
+               ilablen=lentrim(linelabel(it))
+               if(ilablen.le.0)then
+                  call polyline(x(1,it),y(1,it),np(it))
+               else
+                  call labeline(x(1,it),y(1,it),np(it),
+     $                 linelabel(it),ilablen)
+               endif
+            endif
             if(lpm(it))then
                call color((ntraceno(it+markoff)-1)/i2+1)
                call polymark(x(1,it),y(1,it),np(it),
@@ -195,8 +203,6 @@ c Deal with annotations:
       enddo
 
       call pltend
-
- 3    continue
       call exit(0)
 
  106  call cmdlineinterp('-?')
@@ -282,6 +288,7 @@ c Entry point of switch interpretation:
       if(argstr(1:3) .eq. '-mo') read(argstr(4:),*)markoff
       if(argstr(1:3) .eq. '-ds') read(argstr(4:),*)nstycyc
       if(argstr(1:3) .eq. '-bh') read(argstr(4:),*)ybh
+      if(argstr(1:3) .eq. '-ll') cllabel=argstr(4:)
       if(argstr(1:2) .eq. '-?') goto 106
 
       return
@@ -315,6 +322,7 @@ c Usage messages.
       write(*,*)' -ds<int> set trace cycle number of line dash style.'
       write(*,*
      $     )' -z[ntroff] Offset trace count to 1 [or ntroff]' 
+      write(*,*)' -ll.... set line label. -ll** says use filename.'
       write(*,*)'In data files,'
      $     ,' the first line starting with an integer is data start.'
       write(*,*)'Prior lines starting legend: define successive legends'
@@ -336,7 +344,7 @@ c Separated block data program required by standard but not gnu.
       data ly/.false./my/.false./lx/.false./mx/.false./la/.false./
       data lp/.false./lj/.true./lw/.false./ll/.true./
       data xrange/0.,0./yrange/0.,0./
-      data xtitle/' '/ytitle/' '/
+      data xtitle/' '/ytitle/' '/linelabel/ntmax*' '/
       data nmask/ntmax*1/ncolumns/1/
       data xlego/.2/ylego/0./cz/1./
       data xsf/1./ysf/1./ybh/0./ysxp/0./xof/0./yof/0./
@@ -405,6 +413,11 @@ c Store the lengths etc of these trace(s).
             lpm(j)=lp
             ljm(j)=lj
             ntraceno(j)=j-ntroff
+            if(cllabel(1:2).eq.'**')then
+               linelabel(j)=filename
+            else
+               linelabel(j)=cllabel
+            endif
          enddo
 c Read and process the data for these trace(s). 
          do ii=1,np(jj)

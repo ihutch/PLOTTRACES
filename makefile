@@ -5,7 +5,7 @@
 
 #g77 version.
 libraries = -L/usr/X11R6/lib/ -L/home/hutch/accis/ -laccisX -lXt -lX11 -lGL -lGLU
-G77=g77
+G77=gfortran
 COMPILE-SWITCHES = -Wall -O2
 
 #MINGW=mingw-g77 -mwindows -mconsole
