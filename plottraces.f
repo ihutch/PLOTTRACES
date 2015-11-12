@@ -6,11 +6,18 @@ c y's for each of np points. If the second integer (nt) is absent, it is
 c set to 1.  Any lines at the top of the file that do not start with an
 c integer are skipped, as are lines at the end of the file. 
 
-c However each of those skipped lines that starts 'legend:' defines a
-c legend and increments the legend count. The legends are associated
-c with the trace corresponding to the legend count.  Also lines that
-c start with colon minus :- are considered to be additional arguments and
-c are sent to the argument processor.
+c Lines that start 'legend:' define a legend and increments the legend
+c count. The legends are associated with the trace corresponding to the
+c legend count.
+
+c Lines that start 'Coordinate:' define a value of a coordinate
+c associated with each trace, and should be placed after the data.
+c The coordinate overrides the legend for that trace.
+
+c Lines that start 'annotations:' define annotations at given position.
+
+c Lines that start ':-' (colon minus) are considered to be additional
+c arguments and are sent to the argument processor.
 
       include 'cmdlncom.f'
 
@@ -21,10 +28,12 @@ c are sent to the argument processor.
       character*256 legends(ntmax),annotations(ntmax)
       real y(npmax,ntmax)
       real x(npmax,ntmax)
+      real coordinate(ntmax)
       integer np(ntmax),ntraceno(ntmax),ifirst
       real yleginc
       data ifirst/1/
       data legends/ntmax*' '/
+      data coordinate/ntmax*9.9e-20/
       data yleginc/0./
 
       il=0
@@ -46,7 +55,7 @@ c Non-switch argument is assumed to be a filename for reading.
 c Read lines from the data file. They can be of the form
 c :-sx which acts just like cmdline switches.
             call linereading(il,lpm,ljm,legends,y,x,npmax,np,ntraceno,nt
-     $           ,argstr,charin,filename,annotations)
+     $           ,argstr,charin,filename,annotations,coordinate)
             close(13)
          else
 c Intepret switch in cmdline.
@@ -70,8 +79,17 @@ c End of reading command line arguments do loop.
       itic=max(6,iticnum)
       icount=0
       ioldframe=0
-      maxframe=nmask(jj-1)
-      if(maxframe.gt.1)call multiframe(maxframe,ncolumns,1)
+      maxframe=0
+      do it=i1,jj-1,i2
+         maxframe=max(maxframe,nmask(it))
+      enddo
+      if(maxframe.gt.1)then
+         if(ncolumns.gt.1)then
+            call multiframe((maxframe+ncolumns-1)/ncolumns,ncolumns,1)
+         else 
+            call multiframe(maxframe,abs(ncolumns),1)
+         endif
+      endif
 c Do over the traces:
       do it=i1,jj-1,i2
          icount=icount+1
@@ -138,7 +156,7 @@ c Multi-frame ranges set separately.
                ioldframe=nmask(it)
             endif
 c Plot the actual trace:
-            call color((ntraceno(it)-1)/i2+1)
+            call color(mod((ntraceno(it)-1)/i2,nstycyc)+1)
             call dashset(mod((ntraceno(it)-1)/i2,nstycyc))
             if(ljm(it))then
                ilablen=lentrim(linelabel(it))
@@ -150,16 +168,20 @@ c Plot the actual trace:
                endif
             endif
             if(lpm(it))then
-               call color((ntraceno(it+markoff)-1)/i2+1)
+               call color(mod((ntraceno(it+markoff)-1)/i2,nstycyc)+1)
                call polymark(x(1,it),y(1,it),np(it),
-     $              (ntraceno(it+markoff)-1)/i2+1)
+     $              mod((ntraceno(it+markoff)-1)/i2,nstycyc)+1)
             endif
          endif
          write(*,'(i4,8f8.4)')it,(y(k,it),k=1,8)
-c Legends:
+c Legends: and Coordinates
          jl=lentrim(legends(icount))
          if(nmask(it).ne.0)then
-            if(jl.eq.0)then
+            if(coordinate(icount).ne.9.9e-20)then
+               call fwrite(coordinate(icount),iw,4,charin)
+               legends(icount)=' '//charin(1:iw)
+               jl=lentrim(legends(icount))
+            elseif(jl.eq.0)then
                call iwrite(it,iw,argstr)
                call iwrite(np(it),iw2,charin)
                legends(icount)=argstr(1:iw)//' '//charin(1:iw2)
@@ -168,7 +190,7 @@ c Legends:
             if(jl.gt.1.and.ll)then
                call winset(.false.)
                if(lpm(it))then
-                  ntr=ntraceno(it+markoff)/i2
+                  ntr=mod((ntraceno(it+markoff)-1)/i2,nstycyc)+1
                   if(ljm(it))ntr=-ntr
                   call legendline(xlego,(icount+markoff)*.05*cz+ylego
      $                 +yleginc,ntr,legends(icount)(1:jl))
@@ -312,7 +334,7 @@ c Usage messages.
       write(*,*)' -nl toggle legends.'
       write(*,*)' -t1001... mask traces. -t112233... multiframe traces.'
       write(*,*)' -ty<y1n>,<y1x>,<y2n>,y2x>... set multiframe y-ranges'
-      write(*,*)' -tn<num> use num columns to shrink width'
+      write(*,*)' -tn<num> multicolumns. If <0, just shrink plot width'
       write(*,*)' -v Verbose. Write out args, non-data lines read etc.'
       write(*,*)' -lo<xorig>,<yorig> box fraction origin of legends.'
      $     ,' -cz<size> Character scaling size.'
@@ -326,8 +348,11 @@ c Usage messages.
       write(*,*)'In data files,'
      $     ,' the first line starting with an integer is data start.'
       write(*,*)'Prior lines starting legend: define successive legends'
+      write(*,*)'Legends remain aligned with traces if mask is used.'
       write(*,*)'Lines starting annotations: define annotations with '
      $     ,'  format: (2f10.4,a) x-y norm-position, string.'
+      write(*,*)'Following lines starting coordinate: define values to'
+     $     ,' label traces.'
       write(*,*)'Lines starting :- are interpreted as extra switches'
 
       call exit(0)
@@ -357,7 +382,7 @@ c Separated block data program required by standard but not gnu.
       end
 c*********************************************************************
       subroutine linereading(il,lpm,ljm,legends,y,x,npmax,np,ntraceno,nt
-     $     ,argstr,charin,filename,annotations)
+     $     ,argstr,charin,filename,annotations,coordinate)
 c This routine reads lines from an already opened file and interprets
 c them either by calling the commandline interpreter if they are really
 c switches, or else by its own logic as data lines etc.
@@ -371,6 +396,7 @@ c switches, or else by its own logic as data lines etc.
       logical lpm(ntmax),ljm(ntmax)
       real y(npmax,ntmax)
       real x(npmax,ntmax)
+      real coordinate(ntmax)
       integer np(ntmax),ntraceno(ntmax)
       integer il,nt
       real xxd,yyd
@@ -400,6 +426,13 @@ c Process a file-line switch
 c by calling the processor.
             call cmdlineinterp(argstr)
          endif
+         if(charin(1:11).eq.'Coordinate:')then
+c Store real coordinate corresponding to each trace.
+            read(charin(12:),*,end=111,err=111)(coordinate(j),j=1,nt)
+ 111        continue
+c            write(*,*)(coordinate(j),j=1,20)
+         endif
+
 c Read the length of the next trace(s). 
 c If there's no integer, then skip to the next line.
 c If there's a second integer on this line, it's the number of traces.
