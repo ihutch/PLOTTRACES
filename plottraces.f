@@ -156,7 +156,8 @@ c Multi-frame ranges set separately.
                ioldframe=nmask(it)
             endif
 c Plot the actual trace:
-            call color(mod((ntraceno(it)-1)/i2,nstycyc)+1)
+c            call color(mod((ntraceno(it)-1)/i2,nstycyc)+1)
+            call color(mod(mod((ntraceno(it)-1)/i2,nstycyc),15)+1)
             call dashset(mod((ntraceno(it)-1)/i2,nstycyc))
             if(ljm(it))then
                ilablen=lentrim(linelabel(it))
@@ -168,7 +169,9 @@ c Plot the actual trace:
                endif
             endif
             if(lpm(it))then
-               call color(mod((ntraceno(it+markoff)-1)/i2,nstycyc)+1)
+c               call color(mod((ntraceno(it+markoff)-1)/i2,nstycyc)+1)
+               call color(mod(mod((ntraceno(it+markoff)-1)/i2,nstycyc),
+     $              15)+1)
                call polymark(x(1,it),y(1,it),np(it),
      $              mod((ntraceno(it+markoff)-1)/i2,nstycyc)+1)
             endif
