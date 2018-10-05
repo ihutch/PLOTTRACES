@@ -1,5 +1,7 @@
-c      program plottraces
-c Read in traces from files prescribed on the command line and plot them.
+c      program timehistory, based on plottraces code
+c Read in traces from files prescribed on the command line.
+c The files read are a time sequence of traces, and a history is to be
+c stored in an array and subsequently plotted or manipulated.
 c The format of the files consists of one line with up to two integers
 c np,nt followed by np lines of nt+1 floats which prescribe the x and nt
 c y's for each of np points. If the second integer (nt) is absent, it is
@@ -19,14 +21,23 @@ c Lines that start 'annotations:' define annotations at given position.
 c Lines that start ':-' (colon minus) are considered to be additional
 c arguments and are sent to the argument processor.
 
+c Each trace (of nt) is regarded as a different quantity.
+c Each file is regarded as referring to a different time.
+c Therefore the time history is a 3D array (np,nf,nt).
+c Every x of every file must be the same, else things are inconsistent.
+c Every nt of every file must be the same, else inconsistent.
+c Every time we read a new file (and nf incremented), jj is reset to 1.
+c Every trace of every file must have the same length np else we complain. 
+c We truncate to the length of the first trace read. 
+
       include 'cmdlncom.f'
 
       character*256 argstr,charin,filename
       integer npmax
-      parameter (npmax=5000)
+      parameter (npmax=2000)
       logical lpm(ntmax),ljm(ntmax)
       character*256 legends(ntmax),annotations(ntmax)
-      real y(npmax,ntmax)
+      real y(npmax,nfmax,ntmax)
       real x(npmax,ntmax)
       real coordinate(ntmax)
       integer np(ntmax),ntraceno(ntmax),ifirst
@@ -36,6 +47,7 @@ c arguments and are sent to the argument processor.
       data coordinate/ntmax*9.9e-20/
       data yleginc/0./
 
+      nf=0
       il=0
       jj=1
       jt1=0
@@ -50,6 +62,8 @@ c If argstr is blank, then we've exhausted the arguments. Exit.
          if(argstr(1:1) .ne. '-')then
 c Non-switch argument is assumed to be a filename for reading.
             filename=argstr
+            nf=nf+1
+            jj=1  ! Reset for timehistory.
             il=jj
             open(13,file=filename,status='old',err=106)
 c Read lines from the data file. They can be of the form
@@ -64,175 +78,41 @@ c Intepret switch in cmdline.
       enddo
 c---------------------------------------------
 c End of reading command line arguments do loop.
+c---------------------------------------------
       if(jj.eq.1)goto 106
-      call pfset(3)
-      if(iticnum.ne.0)call ticnumset(iticnum)
-      if(cz.ne.1.)call charsize(cz*.015,cz*.015)
-      write(*,*)'First 8 y-values of traces'
-      if(jt1.gt.0)then
-         i1=jt1
-         i2=nt
-      else
-         i1=1
-         i2=1
+      write(*,*)np(1),nf,nt
+
+      if(nf.lt.9)then
+         do i=1,min(35,np(1))
+            write(*,'(10f8.4)')x(i,1),(y(i,j,1),j=1,nf)
+         enddo
       endif
-      itic=max(6,iticnum)
-      icount=0
-      ioldframe=0
-      maxframe=0
-      do it=i1,jj-1,i2
-         maxframe=max(maxframe,nmask(it))
-      enddo
-      if(maxframe.gt.1)then
-         if(ncolumns.gt.1)then
-            call multiframe((maxframe+ncolumns-1)/ncolumns,ncolumns,1)
-         else 
-            call multiframe(maxframe,abs(ncolumns),1)
-         endif
-      endif
-c Do over the traces:
-      do it=i1,jj-1,i2
-         icount=icount+1
-         if(nmask(it).ne.0)then
-            if(ioldframe.ne.nmask(it))then
-               if(ioldframe.ne.0)call color(15)
-               yleginc=(-(icount+markoff-1))*.05*cz
-               if(ylego.eq.0..and.maxframe.gt.1)yleginc=yleginc+.05*cz
-               if(ybh.ne.0.)call axregion(0.31,0.91,.1,.1+ybh)
-c Possible individual frame plot ranges.
-               if(yrit(1,nmask(it)).ne.yrit(2,nmask(it)))then
-c Multi-frame ranges set separately.
-                  call accisinit()
-                  if(xrit(1,nmask(it)).ne.xrit(2,nmask(it)))then
-                     call scalewn(xrit(1,nmask(it)),xrit(2,nmask(it))
-     $                    ,yrit(1,nmask(it)),yrit(2,nmask(it)),lx,ly)
-                  else
-                     if(xrange(1).eq.0. .and. xrange(2).eq.0.)then
-                        call minmax(x(1,it),np(1),xrange(1),xrange(2))
-                        if(.not.lx)call fitrange(xrange(1),xrange(2)
-     $                       ,itic,nxfac,xfac,xdelta,xrange(1)
-     $                       ,xrange(2))
-                     endif
-                     call scalewn(xrange(1),xrange(2),yrit(1,nmask(it))
-     $                    ,yrit(2,nmask(it)),lx,ly)
-                  endif
-               elseif(.not.(xrange(1).eq.0. .and. xrange(2).eq.0.))then
-                  if(yrange(1).eq.0. .and. yrange(2).eq.0.)then
-                     call minmax(y(1,it),np(1),ymin,ymax)
-                     if(.not.ly)call fitrange(ymin,ymax,itic
-     $                    ,nxfac,xfac,xdelta,ymin,ymax)
-                  else
-                     ymin=yrange(1)
-                     ymax=yrange(2)
-                  endif
-                  if(la)then
-                     call pltinaspect(xrange(1),xrange(2),ymin,ymax)
-                  else
-                     call accisinit()
-                  endif
-                  call scalewn(xrange(1),xrange(2),ymin,ymax,lx,ly)
-               elseif(.not.(yrange(1).eq.0. .and. yrange(2).eq.0.))then
-                  if(xrange(1).eq.0. .and. xrange(2).eq.0.)then
-                     call minmax(x(1,it),np(1),xrange(1),xrange(2))
-                     if(.not.lx)call fitrange(xrange(1),xrange(2),itic
-     $                    ,nxfac,xfac,xdelta,xrange(1),xrange(2))
-                  endif
-                  if(la)then
-                     call pltinaspect(xrange(1),xrange(2),yrange(1)
-     $                    ,yrange(2))
-                  else
-                     call accisinit()
-                  endif
-                  call scalewn(xrange(1),xrange(2),yrange(1),yrange(2)
-     $                 ,lx,ly)
-               else
-                  call lautoinit(x(1,it),y(1,it),np(it),lx,ly)
-               endif
-               if(cz.ne.1.)call charsize(cz*.015,cz*.015)
-               call axis()
-               call axis2()
-               call winset(.true.)
-               ifirst=0
-               ioldframe=nmask(it)
-            endif
-c Plot the actual trace:
-c            call color(mod((ntraceno(it)-1)/i2,nstycyc)+1)
-            call color(mod(mod((ntraceno(it)-1)/i2,nstycyc),15)+1)
-            call dashset(mod((ntraceno(it)-1)/i2,nstycyc))
-            if(ljm(it))then
-               ilablen=lentrim(linelabel(it))
-               if(ilablen.le.0)then
-                  call polyline(x(1,it),y(1,it),np(it))
-               else
-                  call labeline(x(1,it),y(1,it),np(it),
-     $                 linelabel(it),ilablen)
-               endif
-            endif
-            if(lpm(it))then
-c               call color(mod((ntraceno(it+markoff)-1)/i2,nstycyc)+1)
-               call color(mod(mod((ntraceno(it+markoff)-1)/i2,nstycyc),
-     $              15)+1)
-               call polymark(x(1,it),y(1,it),np(it),
-     $              mod((ntraceno(it+markoff)-1)/i2,nstycyc)+1)
-            endif
-         endif
-         write(*,'(i4,8f8.4)')it,(y(k,it),k=1,8)
-c Legends: and Coordinates
-         jl=lentrim(legends(icount))
-         if(nmask(it).ne.0)then
-            if(coordinate(icount).ne.9.9e-20)then
-               call fwrite(coordinate(icount),iw,4,charin)
-               legends(icount)=' '//charin(1:iw)
-               jl=lentrim(legends(icount))
-            elseif(jl.eq.0)then
-               call iwrite(it,iw,argstr)
-               call iwrite(np(it),iw2,charin)
-               legends(icount)=argstr(1:iw)//' '//charin(1:iw2)
-               jl=lentrim(legends(icount))
-            endif
-            if(jl.gt.1.and.ll)then
-               call winset(.false.)
-               if(lpm(it))then
-                  ntr=mod((ntraceno(it+markoff)-1)/i2,nstycyc)+1
-                  if(ljm(it))ntr=-ntr
-                  call legendline(xlego,(icount+markoff)*.05*cz+ylego
-     $                 +yleginc,ntr,legends(icount)(1:jl))
-               else
-                  call legendline(xlego,icount*.05*cz+ylego+yleginc,0,
-     $                 legends(icount)(1:jl))
-               endif
-               call winset(.true.)
-            endif
-         else
-            yleginc=yleginc-.05*cz
-         endif
-      enddo
-      write(*,'(a,i3,a)')'Plotted',jj-1,'  traces'
-      call color(15)
-      if(xtitle(1:1).ne.' '.or.ytitle(1:1).ne.' ')then
-         call winset(.false.)
-         if(maxframe.gt.1)then
-            call axlabels(xtitle(1:lentrim(xtitle)),' ')
-            call charangl(90.)
-            call jdrwstr(.03,.35,ytitle(1:lentrim(ytitle)),0.)
-            call charangl(0.)
-         else
-            call axlabels(xtitle(1:lentrim(xtitle))
-     $           ,ytitle(1:lentrim(ytitle)))
-         endif
-      endif
+! Plot a rendering of y.
+      call autocontour(y(1,1,1),npmax,np(1),nf)
+c      call autocolcont(y(1,1,1),npmax,np(1),nf)
+      call pltend()
+c      call pfset(3)
+c      if(iticnum.ne.0)call ticnumset(iticnum)
+c      if(cz.ne.1.)call charsize(cz*.015,cz*.015)
+c Do over the files:
 c Deal with annotations:
-      do i=1,nannot
-         read(annotations(i),*)xa,ya,argstr
-         call drwstr(xa,ya,argstr(1:lentrim(argstr)))
+c      do i=1,nannot
+c         read(annotations(i),*)xa,ya,argstr
+c         call drwstr(xa,ya,argstr(1:lentrim(argstr)))
+c      enddo
+! Write out the result. dt=zero means don't use.
+      open(14,file='timearray.dat',status='unknown',err=106)
+      write(14,*)np(1),nf,nt,dt
+      write(14,*)(x(i,1),i=1,np(1))
+      do kk=1,nt
+         write(14,*)((y(i,j,kk),i=1,np(1)),j=1,nf)
       enddo
-
-      call pltend
+      close(14)
       call exit(0)
-
  106  call cmdlineinterp('-?')
       end
 c******************************************************************
+c Now in accis
 c$$$c Obtain the length of a string omitting trailing blanks.
 c$$$      function lentrim(string)
 c$$$      character*(*) string
@@ -242,7 +122,7 @@ c$$$      enddo
 c$$$      i=0
 c$$$ 101  lentrim=i
 c$$$      end
-c$$$c
+c
 c*********************************************************************
       subroutine cmdlineinterp(argstr)
 c This is called successively for each commandline argument.
@@ -273,6 +153,7 @@ c Entry point of switch interpretation:
       if(argstr(1:2) .eq. '-p') lp=.not.lp
       if(argstr(1:2) .eq. '-j') lj=.not.lj
       if(argstr(1:3) .eq. '-nl') ll=.not.ll
+      if(argstr(1:3) .eq. '-dt') read(argstr(4:),*,end=106,err=106)dt
       if(argstr(1:2) .eq. '-z')then
          read(argstr(3:),'(i5)',end=108,err=108)ntroff
          ntroff=-ntroff+jj-1
@@ -324,6 +205,7 @@ c Usage messages.
      $     ' -my negate-y (toggles)'
       write(*,*)' -rx<min>,<max> -ry<min>,<max> specify plot range.'
      $     ,' -a retain aspect ratio.'
+      write(*,*)' -dt<dt> set timestep length'
       write(*,*)' -sx<xsf> -sy<ysf> set scaling factors x and y'
       write(*,*)' -spyx<power> set power of x by which to divide y'
       write(*,*)' -st<num> set which one of multiple traces to plot'
@@ -378,7 +260,7 @@ c Separated block data program required by standard but not gnu.
       data xsf/1./ysf/1./ybh/0./ysxp/0./xof/0./yof/0./
       data ntroff/0/iticnum/0/
       data markoff/0/ism/0/
-      data nannot/0/
+      data nannot/0/dt/0./
       data ixof/0/iyof/0/ixsc/0/iysc/0/nstycyc/100/
       data xrit/nrit*0/yrit/nrit*0/
 
@@ -397,7 +279,7 @@ c switches, or else by its own logic as data lines etc.
      $     ,annotations(ntmax)
       integer npmax
       logical lpm(ntmax),ljm(ntmax)
-      real y(npmax,ntmax)
+      real y(npmax,nfmax,ntmax)
       real x(npmax,ntmax)
       real coordinate(ntmax)
       integer np(ntmax),ntraceno(ntmax)
@@ -405,6 +287,8 @@ c switches, or else by its own logic as data lines etc.
       real xxd,yyd
 
       integer j,k,ii
+      integer npjj,ntff
+      save npjj,ntff
       
       integer lentrim
       external lentrim
@@ -440,43 +324,38 @@ c Read the length of the next trace(s).
 c If there's no integer, then skip to the next line.
 c If there's a second integer on this line, it's the number of traces.
          read(charin,*,err=101,end=101)np(jj)
+         if(nf.eq.1)npjj=np(jj)
+         if(np(jj).ne.npjj)then
+            write(*,*)'Inconsistent trace length',npjj,nf,np(jj)
+         endif
          read(charin,*,err=103,end=103)np(jj),nt
          goto 104
  103     nt=1
-c Store the lengths etc of these trace(s).
- 104     do j=jj,jj+nt-1
-            np(j)=np(jj)
-            lpm(j)=lp
-            ljm(j)=lj
-            ntraceno(j)=j-ntroff
-            if(cllabel(1:2).eq.'**')then
-               linelabel(j)=filename
-            else
-               linelabel(j)=cllabel
-            endif
-         enddo
+ 104     continue
+         if(nf.eq.1)ntff=nt
+         if(ntff.ne.nt)write(*,*)'Inconsistent trace count',ntff,nf,nt
 c Read and process the data for these trace(s). 
          do ii=1,np(jj)
-            read(13,*,end=105,err=105)x(ii,jj),(y(ii,j),j=jj,jj+nt-1)
+            read(13,*,end=105,err=105)x(ii,jj),(y(ii,nf,j),j=jj,jj+nt-1)
 c Scaling x,y
             if(xsf.ne.1. .or. xof.ne.0.)then
                x(ii,jj)=xsf*(x(ii,jj)+xof)
             endif
             if(ysf.ne.1. .or. yof.ne.0.)then
                do j=jj,jj+nt-1
-                  y(ii,j)=ysf*(y(ii,j)+yof)
+                  y(ii,nf,j)=ysf*(y(ii,nf,j)+yof)
                enddo
             endif
             if(ysxp.ne.0.)then
 c Scaling y by a power of x.
                do j=jj,jj+nt-1
-                  y(ii,j)=y(ii,j)/x(ii,j)**ysxp
+                  y(ii,nf,j)=y(ii,nf,j)/x(ii,j)**ysxp
                enddo
             endif
             if(my)then
 c Negate y
                do j=jj,jj+nt-1
-                  y(ii,j)=-y(ii,j)
+                  y(ii,nf,j)=-y(ii,nf,j)
                enddo
             endif
             do j=jj+1,jj+nt-1
@@ -496,9 +375,9 @@ c Differencing from a particular position's value
          endif
          if(iyof.ne.0)then
             do j=jj,jj+nt-1
-               yyd=y(iyof,j)
+               yyd=y(iyof,nf,j)
                do ii=1,np(jj)
-                  y(ii,j)=y(ii,j)-yyd
+                  y(ii,nf,j)=y(ii,nf,j)-yyd
                enddo
             enddo
          endif
@@ -513,9 +392,9 @@ c Scaling (normalization) by a particular position's value
          endif
          if(iysc.ne.0)then
             do j=jj,jj+nt-1
-               yyd=y(iysc,j)
+               yyd=y(iysc,nf,j)
                do ii=1,np(jj)
-                  y(ii,j)=y(ii,j)/yyd
+                  y(ii,nf,j)=y(ii,nf,j)/yyd
                enddo
             enddo
          endif
@@ -523,10 +402,10 @@ c Scaling (normalization) by a particular position's value
 c Smooth traces
             do j=jj,jj+nt-1
 c Average into an as yet unused trace
-               call triangave(np(jj),ism,y(1,j),y(1,jj+nt))
+               call triangave(np(jj),ism,y(1,nf,j),y(1,nf,jj+nt))
 c Copy back
                do ii=1,np(jj)
-                  y(ii,j)=y(ii,jj+nt)
+                  y(ii,nf,j)=y(ii,nf,jj+nt)
                enddo
             enddo
          endif
