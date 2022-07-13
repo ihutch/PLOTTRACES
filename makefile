@@ -41,7 +41,6 @@ endif
 # just before the include ACCIS.mk line. 
 #########################################################################
 
-
 libraries = $(LIBPATH) $(LIBRARIES)
 G77=gfortran
 COMPILE-SWITCHES = -Wall -O2 -Wno-unused-dummy-argument

@@ -39,6 +39,7 @@ c arguments and are sent to the argument processor.
       il=0
       jj=1
       jt1=0
+      numpf=3
 c---------------------------------------------
 c Read command line arguments do loop.
       do i=1,iargc()
@@ -65,7 +66,8 @@ c Intepret switch in cmdline.
 c---------------------------------------------
 c End of reading command line arguments do loop.
       if(jj.eq.1)goto 106
-      call pfset(3)
+      call pfset(numpf)
+      write(*,*)'numpf=',numpf
       if(iticnum.ne.0)call ticnumset(iticnum)
       if(cz.ne.1.)call charsize(cz*.015,cz*.015)
       write(*,*)'First 8 y-values of traces'
@@ -270,6 +272,7 @@ c Entry point of switch interpretation:
       if(argstr(1:2) .eq. '-x') xtitle=argstr(3:)
       if(argstr(1:2) .eq. '-a') la=.true.
       if(argstr(1:2) .eq. '-v') lw=.true.
+      if(argstr(1:3) .eq. '-pf') read(argstr(4:),*)numpf
       if(argstr(1:2) .eq. '-p') lp=.not.lp
       if(argstr(1:2) .eq. '-j') lj=.not.lj
       if(argstr(1:3) .eq. '-nl') ll=.not.ll
@@ -348,6 +351,7 @@ c Usage messages.
       write(*,*
      $     )' -z[ntroff] Offset trace count to 1 [or ntroff]' 
       write(*,*)' -ll.... set line label. -ll** says use filename.'
+      write(*,*)' -pf<numpf> set plot file output [dflt 3] -3 no stop'
       write(*,*)'In data files,'
      $     ,' the first line starting with an integer is data start.'
       write(*,*)'Prior lines starting legend: define successive legends'
@@ -458,6 +462,7 @@ c Store the lengths etc of these trace(s).
 c Read and process the data for these trace(s). 
          do ii=1,np(jj)
             read(13,*,end=105,err=105)x(ii,jj),(y(ii,j),j=jj,jj+nt-1)
+!            write(*,*)x(ii,jj),(y(ii,j),j=jj,jj+nt-1)
 c Scaling x,y
             if(xsf.ne.1. .or. xof.ne.0.)then
                x(ii,jj)=xsf*(x(ii,jj)+xof)
@@ -537,8 +542,9 @@ c Copy back
          goto 101
 c End of looping over lines
 c-------------------------------------------------------------
- 105  write(*,*)'********* Error reading data at line',ii,' of',np(jj)
-     $     ,nt,'Line=',argstr(1:lentrim(argstr))
+ 105     write(*,'(a,i4,a,2i4,/,a,a)'
+     $        )'********* Error reading data at line',ii,' of',np(jj),nt
+     $        ,' argument ',argstr(1:lentrim(argstr))
       call exit()
  102  continue
       end
